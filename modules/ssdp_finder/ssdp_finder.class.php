@@ -215,161 +215,209 @@ function getLocalIp() {
 *
 * @access public
 */
- function add_to_SSDPdevices($id) {
-  if (!$id) {
-      $id = ($_GET["id"]);
-  }
-  // podkluchaem prostie ustroystva i sozdaem ego
-  include_once (DIR_MODULES.'devices/devices.class.php');
-  $ssdpdevice=SQLSelectOne("SELECT * FROM ssdp_devices WHERE ID='".$id."'");
-  $dev=new devices();
-  $dev->renderStructure();
-  $device_type=$ssdpdevice['TYPE']; // тип устройства (см выше допустимые типы) 
-  $options=array(); // опции добавления
-  $options['TABLE'] = 'ssdp_devices'; // таблица, куда потом запишется LINKED_OBJECT и LINKED_PROPERTY
-  $options['TABLE_ID'] = $id; // ID записи в вышеназванной таблице (запись уже должна быть создана такая)
-  $options['TITLE'] = $ssdpdevice['TITLE']; // название устройства (не обязательно)
-  $options['LOCATION_ID']=$ssdpdevice['LOCATION']; // ID расположения (не обязательно)
-  //$options['ADD_MENU']=1; // добавлять интерфейс работы с устройством в  меню (не обязательно)
-  //$options['ADD_SCENE']=1; // добавлять интерфейс работы с устройством на сцену (не обязательно)
-  //$result=$dev->addDevice($device_type, $options); // добавляем устройство -- возвращает 1 в случае успешного добавления
-  
-   // novaya vstavka	 
-   $dev->setDictionary();
-     $type_details=$dev->getTypeDetails($device_type);
-     if (!is_array($options)) {
+function add_to_SSDPdevices($id) {
+    if (!$id) {
+         $id = ($_GET["id"]);
+         }
+    $ssdpdevice=SQLSelectOne("SELECT * FROM ssdp_devices WHERE ID='".$id."'");
+    $device_type=$ssdpdevice['TYPE']; // тип устройства (см выше допустимые типы) 
+
+    // zagruzhaem structuru ustroystva
+    $this->loadStructureForDevice($device_type);
+
+    // podkluchaem prostie ustroystva i sozdaem ego
+    include_once (DIR_MODULES.'devices/devices.class.php');
+    $dev=new devices();
+    $dev->renderStructure(); 
+    $options=array(); // опции добавления
+    $options['TABLE'] = 'ssdp_devices'; // таблица, куда потом запишется LINKED_OBJECT и LINKED_PROPERTY
+    $options['TABLE_ID'] = $id; // ID записи в вышеназванной таблице (запись уже должна быть создана такая)
+    $options['TITLE'] = $ssdpdevice['TITLE']; // название устройства (не обязательно)
+    $options['LOCATION_ID']=$ssdpdevice['LOCATION']; // ID расположения (не обязательно)
+    //$options['ADD_MENU']=1; // добавлять интерфейс работы с устройством в  меню (не обязательно)
+    //$options['ADD_SCENE']=1; // добавлять интерфейс работы с устройством на сцену (не обязательно)
+    //$result=$dev->addDevice($device_type, $options); // добавляем устройство -- возвращает 1 в случае успешного добавления
+    
+    $dev->setDictionary();
+    $type_details=$dev->getTypeDetails($device_type);
+    if (!is_array($options)) {
          $options=array();
-     }
-     if (!is_array($dev->device_types[$device_type])) {
+         }
+    if (!is_array($dev->device_types[$device_type])) {
          return 0;
-     }
-     if ($options['TABLE'] && $options['TABLE_ID']) {
+         }
+    if ($options['TABLE'] && $options['TABLE_ID']) {
          $table_rec=SQLSelectOne("SELECT * FROM ".$options['TABLE']." WHERE ID=".$options['TABLE_ID']);
          if (!$table_rec['ID']) {
              return 0;
+             }
          }
-     }
-     if ($options['LINKED_OBJECT']!='') {
-         $old_device=SQLSelectOne("SELECT ID FROM devices WHERE LINKED_OBJECT LIKE '".DBSafe($options['LINKED_OBJECT'])."'");
-         if ($old_device['ID']) return $old_device['ID'];
-         $rec['LINKED_OBJECT']=$options['LINKED_OBJECT'];
-     }
+    if ($options['LINKED_OBJECT']!='') {
+        $old_device=SQLSelectOne("SELECT ID FROM devices WHERE LINKED_OBJECT LIKE '".DBSafe($options['LINKED_OBJECT'])."'");
+        if ($old_device['ID']) return $old_device['ID'];
+        $rec['LINKED_OBJECT']=$options['LINKED_OBJECT'];
+        }
      
      $rec=array();
      $rec['TYPE']=$device_type;
      if ($options['TITLE']) {
-       $rec['TITLE']=$options['TITLE'];
-     } else {
-       $rec['TITLE']='New device '.date('H:i');
-     }
+         $rec['TITLE']=$options['TITLE'];
+         } else {
+         $rec['TITLE']='New device '.date('H:i');
+         }
      if ($options['LOCATION_ID']) {
-         $rec['LOCATION_ID']=$options['LOCATION_ID'];
-     }
+           $rec['LOCATION_ID']=$options['LOCATION_ID'];
+           }
      $rec['ID']=SQLInsert('devices',$rec);
      if ($rec['LOCATION_ID']) {
          $location_title=getRoomObjectByLocation($rec['LOCATION_ID'],1);
-     }
+         }
      if (!$rec['LINKED_OBJECT']) {
          $new_object_title=ucfirst($rec['TYPE']).$dev->getNewObjectIndex($type_details['CLASS']);
          $object_id=addClassObject($type_details['CLASS'],$new_object_title,'sdevice'.$rec['ID']);
          $rec['LINKED_OBJECT']=$new_object_title;
          if (preg_match('/New device .+/',$rec['TITLE'])) {
              $rec['TITLE']=$rec['LINKED_OBJECT'];
-         }
+             }
          SQLUpdate('devices',$rec);
-     }
+         }
      if ($table_rec['ID']) {
          $dev->addDeviceToSourceTable($options['TABLE'],$table_rec['ID'],$rec['ID']);
-     }
+         }
      
+    // loaded the drivers for added device
+    $this->loadDrivers($device_type);
 
- // если устройство создано то заполняем данные о нем в остальных таблицах - чтобы вручную не вводить
-
-   // zapolnyaem dannie ob ustroystve в обьектах
-  $ssdpdevice=SQLSelectOne("SELECT * FROM ssdp_devices WHERE ID='".$id."'");
-  $new_object_title = $ssdpdevice['LINKED_OBJECT'];
-  $obj = SQLSelectOne("SELECT * FROM objects WHERE TITLE='".$new_object_title."'");
-  $obj['DESCRIPTION'] = $options['TITLE'];
-  $obj['LOCATION_ID'] = $options['LOCATION_ID'];
-  If (IsSet($obj['ID'])) {
-     SQLUpdate('objects', $obj);
-  }
-  $obj = SQLSelectOne("SELECT * FROM objects WHERE TITLE='".$new_object_title."'");
-  $obj_id = $obj['ID'];
-  $obj_title = $obj['TITLE'];
-  $clas = SQLSelectOne("SELECT * FROM classes WHERE TITLE='".'S'.$device_type."'");
-  $props = SQLSelect("SELECT * FROM properties WHERE CLASS_ID='".$clas['ID']."' OR CLASS_ID='".$clas['PARENT_ID']."'");
-  $ssdp = SQLSelect("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = 'ssdp_devices'");
-  foreach($props as $v) {
-      foreach($ssdp as $t_name) {
-          if ( mb_strtolower($v['TITLE']) == mb_strtolower($t_name ['COLUMN_NAME'])){
-	            $ssdpinf=SQLSelectOne("SELECT ".DBSafe($v['TITLE'])." FROM ssdp_devices WHERE LINKED_OBJECT LIKE '".DBSafe($new_object_title)."'");
-		    $pval = Array();
-		    $pval['PROPERTY_ID'] = $v['ID'];
-		    $pval['OBJECT_ID'] = $obj_id;
-		    $pval['VALUE'] = $ssdpinf[DBSafe($v['TITLE'])];
-		    $pval['PROPERTY_NAME'] = $obj_title.".".$v['TITLE'];
-                    $pval['UPDATED'] = date('Y-m-d H:i:s');
-		    $pval=SQLInsert('pvalues', $pval);
+    // zapolnyaem dannie ob ustroystve в обьектах
+    $ssdpdevice=SQLSelectOne("SELECT * FROM ssdp_devices WHERE ID='".$id."'");
+    $new_object_title = $ssdpdevice['LINKED_OBJECT'];
+    $obj = SQLSelectOne("SELECT * FROM objects WHERE TITLE='".$new_object_title."'");
+    $obj['DESCRIPTION'] = $options['TITLE'];
+    $obj['LOCATION_ID'] = $options['LOCATION_ID'];
+    If (IsSet($obj['ID'])) {
+        SQLUpdate('objects', $obj);
+    }
+    $obj = SQLSelectOne("SELECT * FROM objects WHERE TITLE='".$new_object_title."'");
+    $obj_id = $obj['ID'];
+    $obj_title = $obj['TITLE'];
+    $clas = SQLSelectOne("SELECT * FROM classes WHERE TITLE='".'S'.$device_type."'");
+    $props = SQLSelect("SELECT * FROM properties WHERE CLASS_ID='".$clas['ID']."' OR CLASS_ID='".$clas['PARENT_ID']."'");
+    $ssdp = SQLSelect("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = 'ssdp_devices'");
+    foreach($props as $v) {
+        foreach($ssdp as $t_name) {
+            if ( mb_strtolower($v['TITLE']) == mb_strtolower($t_name ['COLUMN_NAME'])){
+  	           $ssdpinf=SQLSelectOne("SELECT ".DBSafe($v['TITLE'])." FROM ssdp_devices WHERE LINKED_OBJECT LIKE '".DBSafe($new_object_title)."'");
+  		   $pval = Array();
+  		   $pval['PROPERTY_ID'] = $v['ID'];
+  		   $pval['OBJECT_ID'] = $obj_id;
+  		   $pval['VALUE'] = $ssdpinf[DBSafe($v['TITLE'])];
+  		   $pval['PROPERTY_NAME'] = $obj_title.".".$v['TITLE'];
+                   $pval['UPDATED'] = date('Y-m-d H:i:s');
+  		   $pval=SQLInsert('pvalues', $pval);
+                   }
             }
         }
-     }
 
-   //set the class of UPNP devices
+    //set the class of UPNP devices
     $clasofdevice = SQLSelectOne("SELECT * FROM classes WHERE TITLE LIKE 'UPNPdevices'");
+ 
+    //add the roomlocation in properties object
+    //select properties id of linkedroom
+    if ($options['LOCATION_ID']) {
+        $props = SQLSelectOne("SELECT * FROM properties WHERE TITLE LIKE 'linkedRoom' ");
+        $pval = Array();
+        $pval['PROPERTY_ID'] = $props['ID'];
+        $pval['OBJECT_ID'] = $obj_id;
+        $pval['VALUE'] = getRoomObjectByLocation($options['LOCATION_ID']);
+        $pval['PROPERTY_NAME'] = $obj_title.".linkedRoom";
+        $pval['UPDATED'] = date('Y-m-d H:i:s');
+        $pval=SQLInsert('pvalues', $pval);
+        }
+    //add the groupEco in properties object
+    $props = SQLSelectOne("SELECT * FROM properties WHERE TITLE LIKE 'groupEco' AND CLASS_ID='".$clasofdevice['ID']."'");
+    $pval = Array();
+    $pval['PROPERTY_ID'] = $props['ID'];
+    $pval['OBJECT_ID'] = $obj_id;
+    $pval['VALUE'] = '1';
+    $pval['PROPERTY_NAME'] = $obj_title.".groupEco";
+    $pval['UPDATED'] = date('Y-m-d H:i:s');
+    $pval=SQLInsert('pvalues', $pval);
+ 
+    //add the groupEcoOn in properties object
+    $props = SQLSelectOne("SELECT * FROM properties WHERE TITLE LIKE 'groupEcoOn' AND CLASS_ID='".$clasofdevice['ID']."'");
+    $pval = Array();
+    $pval['PROPERTY_ID'] = $props['ID'];
+    $pval['OBJECT_ID'] = $obj_id;
+    $pval['VALUE'] = '0';
+    $pval['PROPERTY_NAME'] = $obj_title.".groupEcoOn";
+    $pval['UPDATED'] = date('Y-m-d H:i:s');
+    $pval=SQLInsert('pvalues', $pval);
+ 
+    //add the groupSunrise in properties object
+    $props = SQLSelectOne("SELECT * FROM properties WHERE TITLE LIKE 'groupSunrise' AND CLASS_ID='".$clasofdevice['ID']."'");
+    $pval = Array();
+    $pval['PROPERTY_ID'] = $props['ID'];
+    $pval['OBJECT_ID'] = $obj_id;
+    $pval['VALUE'] = '0';
+    $pval['PROPERTY_NAME'] = $obj_title.".groupSunrise";
+    $pval['UPDATED'] = date('Y-m-d H:i:s');
+    $pval=SQLInsert('pvalues', $pval);
+ 
+    //add the isActivity in properties object
+    $props = SQLSelectOne("SELECT * FROM properties WHERE TITLE LIKE 'isActivity' AND CLASS_ID='".$clasofdevice['ID']."'");
+    $pval = Array();
+    $pval['PROPERTY_ID'] = $props['ID'];
+    $pval['OBJECT_ID'] = $obj_id;
+    $pval['VALUE'] = '0';
+    $pval['PROPERTY_NAME'] = $obj_title.".isActivity";
+    $pval['UPDATED'] = date('Y-m-d H:i:s');
+    $pval=SQLInsert('pvalues', $pval);
+}
 
-   //add the roomlocation in properties object
-   //select properties id of linkedroom
-	if ($options['LOCATION_ID']) {
-            $props = SQLSelectOne("SELECT * FROM properties WHERE TITLE LIKE 'linkedRoom' ");
-            $pval = Array();
-            $pval['PROPERTY_ID'] = $props['ID'];
-            $pval['OBJECT_ID'] = $obj_id;
-            $pval['VALUE'] = getRoomObjectByLocation($options['LOCATION_ID']);
-            $pval['PROPERTY_NAME'] = $obj_title.".linkedRoom";
-            $pval['UPDATED'] = date('Y-m-d H:i:s');
-            $pval=SQLInsert('pvalues', $pval);
-    }
-   //add the groupEco in properties object
-   $props = SQLSelectOne("SELECT * FROM properties WHERE TITLE LIKE 'groupEco' AND CLASS_ID='".$clasofdevice['ID']."'");
-   $pval = Array();
-   $pval['PROPERTY_ID'] = $props['ID'];
-   $pval['OBJECT_ID'] = $obj_id;
-   $pval['VALUE'] = '1';
-   $pval['PROPERTY_NAME'] = $obj_title.".groupEco";
-   $pval['UPDATED'] = date('Y-m-d H:i:s');
-   $pval=SQLInsert('pvalues', $pval);
+/**
+* load structure for devices
+*
+* @access public
+*/
+function loadStructureForDevice($device_type){
 
-   //add the groupEcoOn in properties object
-   $props = SQLSelectOne("SELECT * FROM properties WHERE TITLE LIKE 'groupEcoOn' AND CLASS_ID='".$clasofdevice['ID']."'");
-   $pval = Array();
-   $pval['PROPERTY_ID'] = $props['ID'];
-   $pval['OBJECT_ID'] = $obj_id;
-   $pval['VALUE'] = '0';
-   $pval['PROPERTY_NAME'] = $obj_title.".groupEcoOn";
-   $pval['UPDATED'] = date('Y-m-d H:i:s');
-   $pval=SQLInsert('pvalues', $pval);
+    // записываем structure in addons для устройства
+    if (!file_exists(ROOT.'/modules/devices/addons/SSDPFinder_'.$device_type.'.php')) {
+        // Открываем файл для получения существующего содержимого
+        $current = file_get_contents('https://raw.githubusercontent.com/tarasfrompir/SSDPDrivers/master/modules/devices/addons/SSDPFinder_'.$device_type.'.php');
+        file_put_contents(ROOT.'/modules/devices/addons/SSDPFinder_'.$device_type.'.php', $current);
+        }
+    return  true;
+}
 
-   //add the groupSunrise in properties object
-   $props = SQLSelectOne("SELECT * FROM properties WHERE TITLE LIKE 'groupSunrise' AND CLASS_ID='".$clasofdevice['ID']."'");
-   $pval = Array();
-   $pval['PROPERTY_ID'] = $props['ID'];
-   $pval['OBJECT_ID'] = $obj_id;
-   $pval['VALUE'] = '0';
-   $pval['PROPERTY_NAME'] = $obj_title.".groupSunrise";
-   $pval['UPDATED'] = date('Y-m-d H:i:s');
-   $pval=SQLInsert('pvalues', $pval);
 
-   //add the isActivity in properties object
-   $props = SQLSelectOne("SELECT * FROM properties WHERE TITLE LIKE 'isActivity' AND CLASS_ID='".$clasofdevice['ID']."'");
-   $pval = Array();
-   $pval['PROPERTY_ID'] = $props['ID'];
-   $pval['OBJECT_ID'] = $obj_id;
-   $pval['VALUE'] = '0';
-   $pval['PROPERTY_NAME'] = $obj_title.".isActivity";
-   $pval['UPDATED'] = date('Y-m-d H:i:s');
-   $pval=SQLInsert('pvalues', $pval);
- }
+/**
+* load drivers for devices
+*
+* @access public
+*/
+function loadDrivers($device_type){
+
+    // записываем шаблон для устройства
+    if (!file_exists(ROOT.'/templates/classes/views/S'.$device_type.'.html')) {
+        // Открываем файл для получения существующего содержимого
+        $current = file_get_contents('https://raw.githubusercontent.com/tarasfrompir/SSDPDrivers/master/templates/classes/views/S'.$device_type.'.html');
+        file_put_contents(ROOT.'/templates/classes/views/S'.$device_type.'.html', $current);
+        }
+    
+    $device = SQLSelectOne("SELECT * FROM classes WHERE TITLE LIKE 'S".$device_type."'");
+    $methods = SQLSelect("SELECT * FROM methods WHERE CLASS_ID='".$device['ID']."'");
+    foreach ($methods as $method) {
+        // записываем methods для устройства
+        // Открываем файл для получения существующего содержимого
+        $current = file_get_contents('https://raw.githubusercontent.com/tarasfrompir/SSDPDrivers/master/modules/devices/S'.$device_type.'_'.$method['TITLE'].'.php');
+        file_put_contents(ROOT.'/modules/devices/S'.$device_type.'_'.$method['TITLE'].'.php', $current);
+        DebMes($method['TITLE']);
+        }
+    return  true;
+}
+
+
 /**
 * get ip from url
 *
@@ -386,6 +434,8 @@ function getIp($baseUrl,$withPort) {
     }
     return  $baseUrl;
 }
+
+
 /**
 * get port from url
 *
@@ -399,6 +449,8 @@ function getIp($baseUrl,$withPort) {
         }
     return  $baseUrl;
 }
+
+
 /**
 * ssdp_devices add record to terminal
 *
@@ -426,6 +478,8 @@ function add_to_terminal($id) {
           SQLInsert('terminals', $terminal);
      }
  }
+
+
 /**
 * ssdp_devices add record to pinghost
 *
@@ -455,31 +509,51 @@ function add_to_terminal($id) {
           SQLInsert('pinghosts', $pinghosts);
      }
  }
+
+
 /**
-* ssdp_devices delete record
+* ssdp_devices delete device
 *
 * @access public
 */
- function delete_ssdp_devices($id) {
-  $rec=SQLSelectOne("SELECT * FROM ssdp_devices WHERE ID='$id'");
-	 if($rec['LINKED_OBJECT']) {
-  /// delete from simple device
-  $sdev_del=SQLSelectOne("SELECT * FROM devices WHERE LINKED_OBJECT='".$rec['LINKED_OBJECT']."'");
-  $sdevice = $sdev_del['ID'];
-  include_once (DIR_MODULES.'devices/devices.class.php');
-  $dev=new devices();
-  $dev->delete_devices($sdevice);
-  // delete from pinghost
-  SQLExec("DELETE FROM pinghosts WHERE LINKED_OBJECT='".$rec['LINKED_OBJECT']."'"); 
-  // delete from terminals
-  SQLExec("DELETE FROM terminals WHERE LINKED_OBJECT='".$rec['LINKED_OBJECT']."'"); 
-  // standart code
-  // delete fromp tables ssdp_devices
-  SQLExec("DELETE FROM ssdp_devices WHERE ID='".$rec['ID']."'"); 
-		 }
- }
-////////////////////////////////// конец моей вставки	
- function propertySetHandle($object, $property, $value) {
+function delete_ssdp_devices($id) {
+    $rec=SQLSelectOne("SELECT * FROM ssdp_devices WHERE ID='$id'");
+    $this->deleteDrivers($device_type);
+    if($rec['LINKED_OBJECT']) {
+        /// delete from simple device
+        $sdev_del=SQLSelectOne("SELECT * FROM devices WHERE LINKED_OBJECT='".$rec['LINKED_OBJECT']."'");
+        $sdevice = $sdev_del['ID'];
+        include_once (DIR_MODULES.'devices/devices.class.php');
+        $dev=new devices();
+        $dev->delete_devices($sdevice);
+        // delete from pinghost
+        SQLExec("DELETE FROM pinghosts WHERE LINKED_OBJECT='".$rec['LINKED_OBJECT']."'"); 
+        // delete from terminals
+        SQLExec("DELETE FROM terminals WHERE LINKED_OBJECT='".$rec['LINKED_OBJECT']."'"); 
+       // standart code
+       // delete fromp tables ssdp_devices
+       SQLExec("DELETE FROM ssdp_devices WHERE ID='".$rec['ID']."'"); 
+       }
+    }
+
+
+/**
+* delete drivers for devices
+*
+* @access public
+*/
+function deleteDrivers($device_type){
+    $alldevice=array();
+    $alldevice = file(ROOT.'/modules/devices/addons/sspdfinder_structure.php');
+    foreach ( $alldevice as $device) {
+         DebMes($device);  
+    }
+    
+    return  true;
+}
+
+
+function propertySetHandle($object, $property, $value) {
   $this->getConfig();
    $table='ssdp_devices';
    $properties=SQLSelect("SELECT ID FROM $table WHERE LINKED_OBJECT LIKE '".DBSafe($object)."' AND LINKED_PROPERTY LIKE '".DBSafe($property)."'");
@@ -490,6 +564,8 @@ function add_to_terminal($id) {
     }
    }
  }
+
+
 function processSubscription($event, $details='') {
 $this->getConfig();
 if ($event=='SAY') {
