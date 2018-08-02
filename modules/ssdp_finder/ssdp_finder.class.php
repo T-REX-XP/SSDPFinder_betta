@@ -384,8 +384,8 @@ function loadStructureForDevice($device_type){
     // записываем structure in addons для устройства
     if (!file_exists(ROOT.'/modules/devices/addons/SSDPFinder_'.$device_type.'.php')) {
         // Открываем файл для получения существующего содержимого
-        $current = file_get_contents('https://raw.githubusercontent.com/tarasfrompir/SSDPDrivers/master/modules/devices/addons/SSDPFinder_'.$device_type.'.php');
-        file_put_contents(ROOT.'/modules/devices/addons/SSDPFinder_'.$device_type.'.php', $current);
+        $current = file_get_contents('https://raw.githubusercontent.com/tarasfrompir/SSDPDrivers/master/modules/devices/addons/SSDPFinder_'.$device_type.'_structure.php');
+        file_put_contents(ROOT.'/modules/devices/addons/SSDPFinder_'.$device_type.'_structure.php', $current);
         }
     return  true;
 }
@@ -400,19 +400,16 @@ function loadDrivers($device_type){
 
     // записываем шаблон для устройства
     if (!file_exists(ROOT.'/templates/classes/views/S'.$device_type.'.html')) {
-        // Открываем файл для получения существующего содержимого
         $current = file_get_contents('https://raw.githubusercontent.com/tarasfrompir/SSDPDrivers/master/templates/classes/views/S'.$device_type.'.html');
         file_put_contents(ROOT.'/templates/classes/views/S'.$device_type.'.html', $current);
         }
-    
+
+    // записываем methods для устройства
     $device = SQLSelectOne("SELECT * FROM classes WHERE TITLE LIKE 'S".$device_type."'");
     $methods = SQLSelect("SELECT * FROM methods WHERE CLASS_ID='".$device['ID']."'");
     foreach ($methods as $method) {
-        // записываем methods для устройства
-        // Открываем файл для получения существующего содержимого
         $current = file_get_contents('https://raw.githubusercontent.com/tarasfrompir/SSDPDrivers/master/modules/devices/S'.$device_type.'_'.$method['TITLE'].'.php');
         file_put_contents(ROOT.'/modules/devices/S'.$device_type.'_'.$method['TITLE'].'.php', $current);
-        DebMes($method['TITLE']);
         }
     return  true;
 }
