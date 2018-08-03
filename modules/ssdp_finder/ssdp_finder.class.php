@@ -382,34 +382,10 @@ function add_to_SSDPdevices($id) {
 function loadStructureForDevice($device_type){
 
     // записываем structure in addons для устройства
-    if (!file_exists(ROOT.'/modules/devices/addons/SSDPFinder_'.$device_type.'.php')) {
+    if (!file_exists(ROOT.'/modules/devices/addons/SSDPFinder_'.$device_type.'_structure.php')) {
         // Открываем файл для получения существующего содержимого
         $current = file_get_contents('https://raw.githubusercontent.com/tarasfrompir/SSDPDrivers/master/modules/devices/addons/SSDPFinder_'.$device_type.'_structure.php');
         file_put_contents(ROOT.'/modules/devices/addons/SSDPFinder_'.$device_type.'_structure.php', $current);
-        }
-    return  true;
-}
-
-
-/**
-* load drivers for devices
-*
-* @access public
-*/
-function loadDrivers($device_type){
-
-    // записываем шаблон для устройства
-    if (!file_exists(ROOT.'/templates/classes/views/S'.$device_type.'.html')) {
-        $current = file_get_contents('https://raw.githubusercontent.com/tarasfrompir/SSDPDrivers/master/templates/classes/views/S'.$device_type.'.html');
-        file_put_contents(ROOT.'/templates/classes/views/S'.$device_type.'.html', $current);
-        }
-
-    // записываем methods для устройства
-    $device = SQLSelectOne("SELECT * FROM classes WHERE TITLE LIKE 'S".$device_type."'");
-    $methods = SQLSelect("SELECT * FROM methods WHERE CLASS_ID='".$device['ID']."'");
-    foreach ($methods as $method) {
-        $current = file_get_contents('https://raw.githubusercontent.com/tarasfrompir/SSDPDrivers/master/modules/devices/S'.$device_type.'_'.$method['TITLE'].'.php');
-        file_put_contents(ROOT.'/modules/devices/S'.$device_type.'_'.$method['TITLE'].'.php', $current);
         }
     return  true;
 }
@@ -515,7 +491,7 @@ function add_to_terminal($id) {
 */
 function delete_ssdp_devices($id) {
     $rec=SQLSelectOne("SELECT * FROM ssdp_devices WHERE ID='$id'");
-    $this->deleteDrivers($device_type);
+    $this->deleteDrivers($rec['TYPE']);
     if($rec['LINKED_OBJECT']) {
         /// delete from simple device
         $sdev_del=SQLSelectOne("SELECT * FROM devices WHERE LINKED_OBJECT='".$rec['LINKED_OBJECT']."'");
@@ -530,6 +506,8 @@ function delete_ssdp_devices($id) {
        // standart code
        // delete fromp tables ssdp_devices
        SQLExec("DELETE FROM ssdp_devices WHERE ID='".$rec['ID']."'"); 
+       // delete fromp tables classes
+       SQLExec("DELETE FROM classes WHERE TITLE='".$rec['TYPE']."'");
        }
     }
 
@@ -540,14 +518,73 @@ function delete_ssdp_devices($id) {
 * @access public
 */
 function deleteDrivers($device_type){
-    $alldevice=array();
-    $alldevice = file(ROOT.'/modules/devices/addons/sspdfinder_structure.php');
-    foreach ( $alldevice as $device) {
-         DebMes($device);  
-    }
-    
+    //выбираем количество устройств из базы данных по одному типу
+    $devices = SQLSelect("SELECT * FROM ssdp_devices WHERE TYPE LIKE '".$device_type."'");
+    // проверяем на присутствие еще такого устройства для определения необходимости удаления драйверов устройства
+    if (count($devices)==1){
+        // удаляем методы устройства
+        $device = SQLSelectOne("SELECT * FROM classes WHERE TITLE LIKE 'S".$device_type."'");
+        $methods = SQLSelect("SELECT * FROM methods WHERE CLASS_ID='".$device['ID']."'");
+        foreach ($methods as $method) {
+            if (file_exists(ROOT.'/modules/devices/S'.$device_type.'_'.$method['TITLE'].'.php')) {
+                unlink(ROOT.'/modules/devices/S'.$device_type.'_'.$method['TITLE'].'.php');
+                };
+            };
+        // удаляем шаблон для устройства
+        if (file_exists(ROOT.'/templates/classes/views/S'.$device_type.'.html')) {
+            unlink(ROOT.'/templates/classes/views/S'.$device_type.'.html');
+            };
+        // удаляем управляющий класс для устройства
+        if (file_exists(ROOT.'/modules/ssdp_finder/upnp/vendor/jalder/upnp/src/'.$device_type.'.php')) {
+            unlink(ROOT.'/modules/ssdp_finder/upnp/vendor/jalder/upnp/src/'.$device_type.'.php');
+            };
+        if (file_exists(ROOT.'/modules/ssdp_finder/upnp/vendor/jalder/upnp/src/'.$device_type.'/Remote.php')) {
+            unlink(ROOT.'/modules/ssdp_finder/upnp/vendor/jalder/upnp/src/'.$device_type.'/Remote.php');
+            rmdir(ROOT.'/modules/ssdp_finder/upnp/vendor/jalder/upnp/src/'.$device_type);
+            };
+        // удаляем structure in addons для устройства
+        if (file_exists(ROOT.'/modules/devices/addons/SSDPFinder_'.$device_type.'_structure.php')) {
+             unlink(ROOT.'/modules/devices/addons/SSDPFinder_'.$device_type.'_structure.php');
+            };
+        };
     return  true;
 }
+
+/**
+* load drivers for devices
+*
+* @access public
+*/
+function loadDrivers($device_type){
+
+    // записываем шаблон для устройства
+    if (!file_exists(ROOT.'/templates/classes/views/S'.$device_type.'.html')) {
+        $current = file_get_contents('https://raw.githubusercontent.com/tarasfrompir/SSDPDrivers/master/templates/classes/views/S'.$device_type.'.html');
+        file_put_contents(ROOT.'/templates/classes/views/S'.$device_type.'.html', $current);
+        }
+
+    // записываем methods для устройства
+    $device = SQLSelectOne("SELECT * FROM classes WHERE TITLE LIKE 'S".$device_type."'");
+    $methods = SQLSelect("SELECT * FROM methods WHERE CLASS_ID='".$device['ID']."'");
+    foreach ($methods as $method) {
+        $current = file_get_contents('https://raw.githubusercontent.com/tarasfrompir/SSDPDrivers/master/modules/devices/S'.$device_type.'_'.$method['TITLE'].'.php');
+        file_put_contents(ROOT.'/modules/devices/S'.$device_type.'_'.$method['TITLE'].'.php', $current);
+        };
+
+    // записываем управляющий класс для устройства
+    if (!file_exists(ROOT.'/modules/ssdp_finder/upnp/vendor/jalder/upnp/src/'.$device_type.'.php')) {
+        $current = file_get_contents('https://raw.githubusercontent.com/tarasfrompir/SSDPDrivers/master/modules/ssdp_finder/upnp/vendor/jalder/upnp/src/'.$device_type.'.php');
+        file_put_contents(ROOT.'/modules/ssdp_finder/upnp/vendor/jalder/upnp/src/'.$device_type.'.php', $current);
+        }
+    if (!file_exists(ROOT.'/modules/ssdp_finder/upnp/vendor/jalder/upnp/src/'.$device_type.'/Remote.php')) {
+        $current = file_get_contents('https://raw.githubusercontent.com/tarasfrompir/SSDPDrivers/master/modules/ssdp_finder/upnp/vendor/jalder/upnp/src/'.$device_type.'/Remote.php');
+        mkdir(ROOT.'/modules/ssdp_finder/upnp/vendor/jalder/upnp/src/'.$device_type, 0777);
+        file_put_contents(ROOT.'/modules/ssdp_finder/upnp/vendor/jalder/upnp/src/'.$device_type.'/Remote.php', $current);
+        };
+
+    return  true;
+}
+
 
 
 function propertySetHandle($object, $property, $value) {
