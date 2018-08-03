@@ -507,7 +507,7 @@ function delete_ssdp_devices($id) {
        // delete fromp tables ssdp_devices
        SQLExec("DELETE FROM ssdp_devices WHERE ID='".$rec['ID']."'"); 
        // delete fromp tables classes
-       SQLExec("DELETE FROM classes WHERE TITLE='".$rec['TYPE']."'");
+       SQLExec("DELETE FROM classes WHERE TITLE='S".$rec['TYPE']."'");
        }
     }
 
